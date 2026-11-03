@@ -688,7 +688,7 @@ function newRun(){
       empRes:1,draw:1,detect:0,slowAll:1,swarmTemp:0,powerAdd:0,shDelay:3},
     stats:{kills:0,dmgDealt:0,dmgTaken:0,recruited:1,bosses:0,elites:0},
     picked:{},syn:[],tech:[],abil:{overdrive:{cd:0},repair:{cd:0}},adapt:{armor:0,eres:0,air:0,aa:0,emp:0,flank:0},streak:{},
-    wdmg:{ball:0,expl:0,energy:0,drone:0,ability:0},shieldAbs:0,waveDamage:0,
+    wdmg:{ball:0,expl:0,energy:0,drone:0,ability:0},shieldAbs:0,waveDamage:0,threat:1,threatMsg:'',
     powerPri:['shield','turrets','weapons','drones','support'],pUse:0,pCap:0,pTimer:0,nextFx:{},lastMod:null,
     fx:{overdrive:0,dome:0,slow:0,redist:0,coolT:0,reveal:0,saturation:0,satT:0,emps:0},arm:null,cur:null,next:null,cards:null,newAch:[]};
   const g=makeGuard(R('weapon')>=1?'rifle':'pistol','C');if(R('weapon')>=2)g.rank=2;G.guards.push(g);
@@ -822,7 +822,8 @@ function buildWave(n){
   G.lastMod=mod;
   let pace=n<=2?'slow':n<=4?(n===3?'medium':'slow'):pickW({slow:.32,medium:.4,fast:n>6?.34:.2});
   if(boss)pace='medium';if(mod==='supply')pace='slow';if(mod==='frenzy'&&pace==='fast')pace='medium';
-  let count=Math.round((5+n*2)*{slow:.75,medium:1,fast:1.4}[pace]*(boss?.55:1)*(mod==='gangwar'?1.25:mod==='supply'?.75:1)*(fx.count||1));
+  const thr=G.threat||1;
+  let count=Math.round((6+n*2.6+Math.pow(n,1.4)*.15)*Math.pow(thr,.6)*{slow:.75,medium:1,fast:1.4}[pace]*(boss?.55:1)*(mod==='gangwar'?1.25:mod==='supply'?.75:1)*(fx.count||1));
   // factions: pick primary gangs for identity
   const types=availTypes(n),facs=[...new Set(types.map(t=>ENEMIES[t].f))];
   const nPrim=mod==='gangwar'?3:(fx.gangs||(n>8&&Math.random()<.4?2:1));
@@ -835,7 +836,7 @@ function buildWave(n){
     wts[t]=w}
   if(mod==='swarm'&&!types.some(t=>ENEMIES[t].air))wts.buzz=12;
   // directions: flanking adaptation targets weakly covered sectors
-  const nd=mod==='siege'?1:pace==='slow'?(n>8?3:2):pace==='medium'?(n>6?4:3):8;
+  const nd=mod==='siege'?1:pace==='slow'?(n>=3?3:2):pace==='medium'?(n>6?5:4):8;
   let dirs;
   if(mod==='siege'){const k=Object.keys(DIRS)[ri(8)];dirs=[k]}
   else if(G.adapt.flank>0&&nd<8){const cov=sectorCoverage();const ks=Object.keys(DIRS).sort((a,b)=>(cov[a]-cov[b])+rand(-1,1)*(3-G.adapt.flank));dirs=ks.slice(0,nd)}
@@ -845,7 +846,11 @@ function buildWave(n){
   while(i<count){const dir=dirs[ri(dirs.length)],sz=Math.min(count-i,gsz[0]+ri(gsz[1]-gsz[0]+1));
     for(let k=0;k<sz;k++){q.push({t:t+k*spc,type:pickW(wts),dir});i++}
     t+=sz*spc+gap*rand(.8,1.2)}
-  if(elite){const pool=types.filter(x=>x!=='rat'&&x!=='buzz');for(let e=0;e<1+Math.floor(n/10);e++)q.push({t:t*.45+e*2.5,type:pool[ri(pool.length)]||'reaper',dir:dirs[ri(dirs.length)],elite:true})}
+  if(n>=4&&mod!=='siege'&&dirs.length<8){const other=Object.keys(DIRS).filter(k=>!dirs.includes(k));const squads=1+Math.floor(n/8)+Math.floor((thr-1)*2);
+    for(let sq=0;sq<squads;sq++){const dir=other[ri(other.length)],st=rand(3,Math.max(5,t*.85)),sz=3+ri(3)+Math.floor(n/12);for(let k=0;k<sz;k++)q.push({t:st+k*.3,type:pickW(wts),dir,flank:1})}}
+  const pool0=types.filter(x=>x!=='rat'&&x!=='buzz');
+  if(!elite&&!boss&&n>=8&&pool0.length){const ne=(Math.random()<.5?1:0)+Math.floor((thr-1)*2);for(let e=0;e<ne;e++)q.push({t:rand(4,Math.max(6,t*.8)),type:pool0[ri(pool0.length)],dir:Object.keys(DIRS)[ri(8)],elite:true})}
+  if(elite){const pool=pool0;for(let e=0;e<1+Math.floor(n/7)+Math.floor((thr-1)*2);e++)q.push({t:t*.45+e*2.5,type:pool[ri(pool.length)]||'reaper',dir:dirs[ri(dirs.length)],elite:true})}
   let bossType=null;
   if(boss){bossType=BOSS_ORDER[(n/10-1)%5];q.push({t:3,type:bossType,dir:dirs[0],boss:true});
     if(bossType==='warlord')q.push({t:3.5,type:'gunner',dir:dirs[0]},{t:4,type:'gunner',dir:dirs[0]})}
@@ -855,7 +860,7 @@ function buildWave(n){
   const report=G.wave>0?updateAdaptation():[];
   const cyc=Math.floor((n-1)/50);
   return{n,pace,mod,queue:q,dirs,boss,bossType,elite,count:q.length,factions:fac,report,convoy:!!fx.convoy,malf:fx.malf||null,pfail:!!fx.pfail,reinforce:fx.reinforce||0,reward:fx.reward||1,
-    hpS:(1+.07*(n-1)+.003*(n-1)**2),spdS:Math.min(1.3,1+.012*(n-1)),dmgS:1+.05*(n-1),bossS:(1+.04*n)*(1+.6*cyc)};
+    hpS:(1+.09*(n-1)+.004*(n-1)**2)*Math.pow(thr,.75),spdS:Math.min(1.45,1+.018*(n-1)),dmgS:(1+.07*(n-1))*Math.pow(thr,.4),bossS:(1+.05*n)*(1+.6*cyc)*Math.pow(thr,.6),thr};
 }
 function spawnEnemy(sp,atX,atY){
   const d=ENEMIES[sp.type],w=G.cur,el=!!sp.elite;
@@ -1341,6 +1346,9 @@ function startWave(){
 }
 function waveCleared(){
   const perfect=G.waveDamage===0;
+  {const f=G.waveDamage/Math.max(1,G.maxHp),old=G.threat||1;let d=0;
+   if(G.wave>=2){d=f<.03?.16:f<.12?.08:f<.3?.02:f>.5?-.15:0}
+   G.threat=clamp(old+d,.85,4);G.threatMsg=d>0.05?' · enemies are escalating':d<0?' · enemies ease off':''}
   let bonus=Math.round((20+G.wave*6)*(perfect?1.25:1));
   if(G.cur.convoy){bonus+=250;G.tc+=3}
   G.credits+=bonus;G.state='cards';G.priority=null;G.arm=null;
@@ -1351,7 +1359,7 @@ function waveCleared(){
   if(G.wave>P.stats.best)P.stats.best=G.wave;
   saveProfile();
   G.cards=rollCards();
-  $('cardsSub').textContent=`Wave ${G.wave} cleared · +${bonus} CR${perfect?' (no damage taken)':''}${G.cur.convoy?' · convoy loot +3 tech':''} · crew patched +${fix} HP`;
+  $('cardsSub').textContent=`Wave ${G.wave} cleared · +${bonus} CR${perfect?' (no damage taken)':''}${G.cur.convoy?' · convoy loot +3 tech':''} · crew patched +${fix} HP${G.threatMsg||''}`;
   renderCards();
   setTimeout(()=>{if(G&&G.state==='cards'){$('cards').hidden=false;sfx('up')}},500);
 }
@@ -1438,7 +1446,7 @@ const RUNKEY='cls.run.v2';
 function saveRun(){
   if(!G||G.state!=='prep')return;
   try{
-    const keep=['wave','credits','tc','xp','cmd','tokens','hp','maxHp','armor','shield','maxShield','shieldRegen','level','gen','cool','radar','targeting','repairSys','ammo','mines','fence','barricade','droneCapAdd','M','stats','picked','syn','tech','adapt','streak','wdmg','powerPri','nextFx','lastMod','next','elapsed'];
+    const keep=['wave','credits','tc','xp','cmd','tokens','hp','maxHp','armor','shield','maxShield','shieldRegen','level','gen','cool','radar','targeting','repairSys','ammo','mines','fence','barricade','droneCapAdd','M','stats','picked','syn','tech','adapt','streak','wdmg','powerPri','nextFx','lastMod','next','elapsed','threat'];
     const o={v:2};for(const k of keep)o[k]=G[k];
     o.guards=G.guards.filter(g=>!g.temp).map(g=>({type:g.type,slot:g.slot,rank:g.rank,kills:g.kills,evo:g.evo,stance:g.stance}));
     o.turrets=G.turrets.map(t=>({type:t.type,pad:t.pad,lv:t.lv}));
@@ -1583,7 +1591,7 @@ function prepOverview(){
   let h=`<section class="intel"><div class="eyebrow">Intel · wave ${nw.n}</div>
     <p><b class="tag ${nw.pace}">${PACE[nw.pace].toUpperCase()}</b> ${nw.count} hostiles · ${nw.factions.join(', ')}</p>
     ${nw.mod?`<p style="color:var(--violet)">${MODS[nw.mod].name}: ${MODS[nw.mod].desc}</p>`:''}
-    <p class="dirs">Approach: ${nw.dirs.length===8?'all directions':nw.dirs.join(' · ')}</p>
+    <p class="dirs">Approach: ${nw.dirs.length===8?'all directions':nw.dirs.join(' · ')+(nw.n>=4&&nw.mod!=='siege'?' + flanking squads':'')}</p><p class="rep" style="color:var(--red)">Threat level ×${(nw.thr||1).toFixed(2)} · rises when you clear waves without damage</p>
     ${nw.boss?`<p class="warn">BOSS: ${ENEMIES[nw.bossType].name.toUpperCase()}</p><p class="rep">Weakness: ${ENEMIES[nw.bossType].weak}</p>`:''}
     ${nw.elite?'<p class="warn">ELITE UNITS DETECTED · each drops 1 tech</p>':''}
     ${nw.convoy?'<p class="warn">ELITE CONVOY INBOUND</p>':''}${nw.malf?`<p class="rep">Malfunction: ${nw.malf} at 60%</p>`:''}${nw.pfail?'<p class="rep">Power failure: −35% capacity</p>':''}${nw.reinforce?'<p class="rep">2 mercenaries join this wave</p>':''}
