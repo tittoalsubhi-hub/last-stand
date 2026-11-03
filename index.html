@@ -638,7 +638,7 @@ const CARDS=[
  C('pCannon','prototype','Prototype','beam','Experimental Energy Cannon','Unlock the Energy Cannon. It needs a lot of power to recharge.',()=>ABIL.ecannon.desc+' · power capacity −10',g=>{unlockAb('ecannon')(g);g.M.powerAdd-=10},g=>!g.abil.ecannon),
  C('pTime','prototype','Prototype','clock','Chrono Field','Enemies are permanently slower; abilities recharge slower.',()=>'Enemy speed −12% · cooldowns +20%',g=>{g.M.slowAll*=.88;g.M.cdr*=1.2}),
 ];
-const RARW={common:52,rare:28,epic:12,legendary:5};
+const RARW={common:65,rare:24,epic:8,legendary:2.5};
 const SYN=[
  {id:'beam',name:'Sustained Beam',a:'Laser Overcharge',b:'Advanced Heat Sink or better cooling',ok:g=>g.picked.laserOver&&g.cool>=2,apply:g=>{g.M.energyHeat*=.4;g.M.energy*=1.15},desc:'Energy weapons build 60% less heat and deal 15% more damage.'},
  {id:'swarm',name:'Autonomous Swarm',a:'Drone Commander',b:'Swarm Protocol',ok:g=>g.picked.droneCmd&&g.picked.swarm,apply:g=>{g.droneCapAdd+=2;g.M.swarmTemp=2},desc:'+2 drone capacity, and 2 extra combat drones launch every wave.'},
@@ -1391,7 +1391,7 @@ function rollCards(protoOnly){
   const n=protoOnly?2:(R('cards')>=3?4:3);
   const pool=CARDS.filter(c=>(protoOnly?c.r==='prototype':c.r!=='prototype')&&(!c.req||c.req(G)));
   const out=[];const rw=protoOnly?{prototype:1}:{...RARW};
-  if(!protoOnly){rw.legendary+=Math.min(10,G.wave*.4);rw.epic+=Math.min(8,G.wave*.4);if(G.wave>=15)rw.prototype=2}
+  if(!protoOnly){rw.legendary+=Math.min(4,G.wave*.15);rw.epic+=Math.min(5,G.wave*.2);if(G.wave>=20)rw.prototype=1}
   for(let k=0;k<n&&pool.length;k++){
     const r=pickW(rw);let cand=pool.filter(c=>c.r===r&&!out.includes(c));
     if(!protoOnly&&R('ultimateTech')&&r==='legendary'){const ult=cand.filter(c=>c.cat==='Ultimate');if(ult.length&&Math.random()<.5)cand=ult}
