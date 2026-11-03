@@ -67,6 +67,11 @@ svg.i{display:block;flex:none}
 .ab kbd{position:absolute;left:3px;top:1px;font-size:8px;color:var(--dim);z-index:1;font-family:var(--mono)}
 .ab em{position:absolute;right:3px;bottom:1px;font-style:normal;font-size:9px;color:var(--fg);z-index:1;font-variant-numeric:tabular-nums}
 .hint{position:absolute;left:8px;bottom:64px;font-size:10px;color:var(--dim);max-width:44%;line-height:1.4}
+#stick{position:absolute;border-radius:50%;background:radial-gradient(circle,rgba(41,240,255,.1),rgba(16,13,29,.6) 70%);border:2px solid rgba(41,240,255,.4);touch-action:none;z-index:2;pointer-events:auto}
+#stick .knob{position:absolute;left:29%;top:29%;width:42%;height:42%;border-radius:50%;background:rgba(41,240,255,.28);border:2px solid var(--cyan);box-shadow:0 0 14px rgba(41,240,255,.5);pointer-events:none}
+#stick .lbl{position:absolute;left:0;right:0;bottom:-16px;text-align:center;font-family:var(--display);font-size:9px;letter-spacing:.2em;color:var(--dim);pointer-events:none}
+#stick.on{border-color:var(--cyan);background:radial-gradient(circle,rgba(41,240,255,.2),rgba(16,13,29,.7) 70%)}
+#stick.preview{z-index:20;pointer-events:none;outline:2px dashed var(--amber);outline-offset:4px;opacity:.85}
 #banner{position:absolute;left:0;right:0;top:36%;text-align:center;pointer-events:none;font-family:var(--display);font-weight:700;font-size:clamp(26px,6vw,56px);letter-spacing:.08em;color:var(--fg);text-shadow:0 0 18px var(--mag),0 0 2px #fff;opacity:0;transition:opacity .35s}
 #banner small{display:block;font-size:.32em;letter-spacing:.24em;color:var(--cyan);text-shadow:0 0 10px var(--cyan)}
 #banner.on{opacity:1}
@@ -196,6 +201,7 @@ h2.t{margin:0;font-family:var(--display);font-size:26px;letter-spacing:.05em;tex
       <div id="abil"></div>
       <div class="ctl"><button id="bSpeed" aria-label="Game speed">1×</button><button id="bPause" aria-label="Pause">II</button></div>
     </div>
+    <div id="stick" hidden><div class="knob"></div><div class="lbl">MOVE</div></div>
     <div id="banner"></div>
     <div id="toast"></div>
   </div>
@@ -287,6 +293,13 @@ h2.t{margin:0;font-family:var(--display);font-size:26px;letter-spacing:.05em;tex
       <label class="set">Effects<input type="range" id="sSfx" min="0" max="1" step="0.05"></label>
       <label class="set">Mute all<input type="checkbox" id="sMute"></label>
       <label class="set">Damage numbers<input type="checkbox" id="sNums"></label>
+      <div class="eyebrow">Guard joystick</div>
+      <label class="set">Show joystick<input type="checkbox" id="sStick"></label>
+      <div class="set"><span>Side</span><div class="seg" id="sSide" style="grid-template-columns:1fr 1fr"><button data-v="left">Left</button><button data-v="right">Right</button></div></div>
+      <label class="set">Size<input type="range" id="sStSize" min="80" max="200" step="5"></label>
+      <label class="set">Height<input type="range" id="sStY" min="0" max="100" step="1"></label>
+      <label class="set">From edge<input type="range" id="sStX" min="0" max="100" step="1"></label>
+      <div class="note">Drag the joystick to move every guard together. Let go and each guard walks back to his assigned post. Arrow keys do the same on a keyboard.</div>
       <div class="set"><span>Visual effects</span><div class="seg" id="sFx"><button data-v="auto">Auto</button><button data-v="high">High</button><button data-v="low">Low</button></div></div>
       <div class="row"><button class="btn warn" id="bReset">Reset all progress</button><span class="note" id="resetNote"></span></div>
       <button class="btn alt" id="bSetBack">Back</button>
@@ -358,12 +371,13 @@ const IC={
 const ic=(n,s=20)=>`<svg class="i" viewBox="0 0 24 24" width="${s}" height="${s}" aria-hidden="true"><g fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${IC[n]||IC.star}</g></svg>`;
 
 /* ================= PROFILE (permanent) ================= */
-const PDEF=()=>({v:2,shards:0,research:{},stats:{best:0,kills:0,dmgDealt:0,dmgTaken:0,recruited:0,drones:0,bosses:0,runs:0,longest:0},ach:{},syn:[],skin:'neon',settings:{music:.55,sfx:.8,mute:false,fx:'auto',nums:true}});
+const PDEF=()=>({v:2,shards:0,research:{},stats:{best:0,kills:0,dmgDealt:0,dmgTaken:0,recruited:0,drones:0,bosses:0,runs:0,longest:0},ach:{},syn:[],skin:'neon',settings:{music:.55,sfx:.8,mute:false,fx:'auto',nums:true,stick:{on:true,side:'right',size:130,x:4,y:18}}});
 let P=PDEF(),notice='';
 function loadProfile(){
   try{const raw=localStorage.getItem('cls.profile.v2');
     if(raw){const o=JSON.parse(raw);if(!o||typeof o!=='object')throw 0;const d=PDEF();
-      P={...d,shards:+o.shards||0,research:(o.research&&typeof o.research==='object')?o.research:{},stats:{...d.stats,...(o.stats||{})},ach:(o.ach&&typeof o.ach==='object')?o.ach:{},syn:Array.isArray(o.syn)?o.syn:[],skin:typeof o.skin==='string'?o.skin:'neon',settings:{...d.settings,...(o.settings||{})}};}
+      P={...d,shards:+o.shards||0,research:(o.research&&typeof o.research==='object')?o.research:{},stats:{...d.stats,...(o.stats||{})},ach:(o.ach&&typeof o.ach==='object')?o.ach:{},syn:Array.isArray(o.syn)?o.syn:[],skin:typeof o.skin==='string'?o.skin:'neon',settings:{...d.settings,...(o.settings||{})}};
+      P.settings.stick={...d.settings.stick,...((o.settings&&o.settings.stick)||{})};}
     const old=+localStorage.getItem('cls.best')||0;if(old>P.stats.best)P.stats.best=old;
   }catch(e){P=PDEF();notice='Saved progress could not be read, so a fresh profile was started.'}
 }
@@ -1012,9 +1026,17 @@ function updateGuard(g,dt,idx){
   const sg=geomAt(g),range=guardRange(g,sg,d);
   const rk=1+g.rank*.12,rate=(d.rate||1)*G.M.rate*(1+g.rank*.05)*(G.fx.overdrive>0?1.6:1)*(g.medBuff?1.12:1)*(d.dt==='ball'&&G.ammo?1.1:1);
   if(d.heat||d.heatPS){const cm=coolMul();g.heat=Math.max(0,g.heat-dt*.42*cm);if(g.over&&g.heat<.3)g.over=false}
+  // --- manual joystick control ---
+  if(STK.active){
+    const sp=95*G.M.move*dt,L=240+G.M.leash;let nx=clamp(g.x+STK.x*sp,24,W-24),ny=clamp(g.y+STK.y*sp,24,H-24);
+    if(distToBld(nx,ny)<=L){g.x=nx;g.y=ny}else if(distToBld(nx,g.y)<=L)g.x=nx;else if(distToBld(g.x,ny)<=L)g.y=ny;
+    g.dest=null;g.returning=true;if(!g.target&&(STK.x||STK.y))g.ang=Math.atan2(STK.y,STK.x);
+  }else if(g.returning){const home=g.slot?slotGeom(g.slot):{x:g.hx||CX,y:g.hy||CY};
+    if(Math.hypot(home.x-g.x,home.y-g.y)<2){g.x=home.x;g.y=home.y;g.returning=false;g.dest=null;g.postHold=10}else g.dest=home}
+  if(g.postHold>0&&!STK.active&&!g.returning){g.postHold-=dt;g.dest=null;g.think=.2}
   // --- movement decisions ---
   g.think-=dt;
-  if(g.think<=0){g.think=.35*G.M.acq;
+  if(!STK.active&&!g.returning&&g.think<=0){g.think=.35*G.M.acq;
     const tgt=g.stance==='hold'&&g.slot?null:chooseTarget(sg,range,d);
     if(g.stance==='hold'||tgt){g.dest=g.stance==='hold'&&g.slot?slotGeom(g.slot):null}
     else{
@@ -1036,7 +1058,7 @@ function updateGuard(g,dt,idx){
       }
     }
   }
-  if(g.dest){const dx=g.dest.x-g.x,dy=g.dest.y-g.y,dd=Math.hypot(dx,dy),sp=(geomAt(g).ground?65:85)*G.M.move*dt;
+  if(g.dest&&!STK.active){const dx=g.dest.x-g.x,dy=g.dest.y-g.y,dd=Math.hypot(dx,dy),sp=(geomAt(g).ground?65:85)*G.M.move*dt*(g.returning?1.3:1);
     if(dd<=sp){g.x=g.dest.x;g.y=g.dest.y;g.dest=null}else{g.x+=dx/dd*sp;g.y+=dy/dd*sp;if(!g.target)g.ang=Math.atan2(dy,dx)}}
   // --- targeting & firing ---
   g.scan-=dt;
@@ -1330,7 +1352,7 @@ function updateProjectiles(dt){
 
 /* ================= FLOW ================= */
 function startWave(){
-  if(!G||G.state!=='prep')return;
+  if(!G||G.state!=='prep')return;releaseStick();placeStick();
   audioStart();
   G.wave++;G.cur=G.next;G.queue=G.cur.queue.slice();G.waveT=0;G.waveDamage=0;G.shieldAbs=0;G.sel=null;G.selPad=null;G.state='combat';G.arm=null;G.stormT=5;
   for(const k in G.wdmg)G.wdmg[k]*=.5;
@@ -1345,6 +1367,7 @@ function startWave(){
   buildAbilBar();hud(true);
 }
 function waveCleared(){
+  releaseStick();for(const g of G.guards)g.returning=false;
   const perfect=G.waveDamage===0;
   {const f=G.waveDamage/Math.max(1,G.maxHp),old=G.threat||1;let d=0;
    if(G.wave>=2){d=f<.03?.16:f<.12?.08:f<.3?.02:f>.5?-.15:0}
@@ -1388,7 +1411,7 @@ function maybeEvent(){
 }
 function enterPrep(){
   G.state='prep';$('event').hidden=true;
-  for(const g of G.guards){if(g.slot){const s=slotGeom(g.slot);g.x=s.x;g.y=s.y}g.down=0;g.hp=60+G.M.guardHp;g.heat=0;g.over=false;g.dest=null;g.target=null}
+  for(const g of G.guards){g.returning=false;if(g.slot){const s=slotGeom(g.slot);g.x=s.x;g.y=s.y}g.down=0;g.hp=60+G.M.guardHp;g.heat=0;g.over=false;g.dest=null;g.target=null}
   for(const t of G.turrets){t.maxHp=120*(1+t.lv*.4);t.hp=t.maxHp;t.heat=0;t.over=false;t.off=0}
   for(const d of G.drones){d.dead=0;d.hp=DRONES[d.type].hp*G.M.droneHp;d.off=0;d.x=CX;d.y=CY}
   rebuildPerimeter();
@@ -1551,7 +1574,7 @@ function hud(force){
   $('hint').hidden=!(G.state==='prep'||G.wave<=1);
   $('hint').textContent=G.arm?`Tap the battlefield to fire ${ABIL[G.arm].name}.`:G.state==='prep'?'Tap a guard, then a slot, to move it. Tap a pad to build a turret.':'Guards fire and reposition on their own. Tap an enemy to focus fire.';
   if(G.state==='prep'){const cr=$('prepCr');if(cr)cr.textContent=fmt(G.credits)+' CR'}
-  updAbilBar();
+  updAbilBar();stickVisible();
 }
 let abBtns=[];
 function buildAbilBar(){
@@ -1744,7 +1767,7 @@ $('bPSettings').onclick=()=>{openSettings('pause')};
 const SPEEDS=[1,1.5,2];
 $('bSpeed').onclick=()=>setSpeed(SPEEDS[(SPEEDS.indexOf(G.speed)+1)%3]);
 function setSpeed(s){if(!G)return;G.speed=s;$('bSpeed').textContent=s+'×'}
-function setPause(p){if(!G||G.state==='over')return;G.paused=p;$('pause').hidden=!p;$('bQuit').dataset.c='';$('bQuit').textContent='Abandon run';
+function setPause(p){if(!G||G.state==='over')return;G.paused=p;if(p)releaseStick();$('pause').hidden=!p;$('bQuit').dataset.c='';$('bQuit').textContent='Abandon run';
   $('pauseNote').textContent=G.state==='combat'?'Save and exit keeps your progress from the start of this wave.':'';}
 document.querySelectorAll('[data-close]').forEach(b=>b.onclick=()=>{$(b.dataset.close).hidden=true;if(!G)openMenu()});
 function openResearch(){
@@ -1766,10 +1789,38 @@ $('bRecords').onclick=()=>{const s=P.stats,un=RESEARCH.filter(r=>r.tech&&R(r.id)
   $('recSyn').innerHTML=SYN.map(s=>{const k=P.syn.includes(s.id);return`<div class="${k?'on':''}">${ic(k?'check':'lock',14)}<span><b>${k?s.name:'Unknown'}</b> · ${s.a} + ${s.b}${k?'. '+s.desc:''}</span></div>`}).join('');
   $('records').hidden=false};
 let setFrom=null;
+/* ---- guard joystick ---- */
+const STK={active:false,x:0,y:0,src:null};
+const stEl=$('stick'),knob=stEl.querySelector('.knob');let stId=null;
+function placeStick(){const s=P.settings.stick,st=$('stage').getBoundingClientRect(),z=s.size;
+  stEl.style.width=stEl.style.height=z+'px';
+  const ex=12+(s.x/100)*Math.max(0,st.width/2-z/2-12),by=64+(s.y/100)*Math.max(0,st.height-64-z-24);
+  stEl.style.left=s.side==='left'?ex+'px':'';stEl.style.right=s.side==='right'?ex+'px':'';stEl.style.bottom=by+'px'}
+function stickVisible(){const prev=!$('settings').hidden;stEl.classList.toggle('preview',prev);
+  const show=P.settings.stick.on&&(prev||(G&&G.state==='combat'&&!G.paused));if(stEl.hidden===show)stEl.hidden=!show;if(!show&&STK.active&&STK.src==='touch')releaseStick()}
+function stMove(e){const r=stEl.getBoundingClientRect(),R=r.width/2;let dx=(e.clientX-r.left-R)/R,dy=(e.clientY-r.top-R)/R;const m=Math.hypot(dx,dy);if(m>1){dx/=m;dy/=m}
+  const dz=m<.15;STK.x=dz?0:dx;STK.y=dz?0:dy;STK.active=true;STK.src='touch';knob.style.transform=`translate(${dx*R*.6}px,${dy*R*.6}px)`;stEl.classList.add('on')}
+function releaseStick(){const was=STK.active;STK.active=false;STK.x=STK.y=0;STK.src=null;knob.style.transform='';stEl.classList.remove('on');
+  if(was&&G)for(const g of G.guards)if(g.down<=0){g.returning=true;g.dest=null}}
+stEl.addEventListener('pointerdown',e=>{if(!G||G.state!=='combat'||G.paused||stEl.classList.contains('preview'))return;stId=e.pointerId;try{stEl.setPointerCapture(e.pointerId)}catch(_){}stMove(e);e.preventDefault()});
+stEl.addEventListener('pointermove',e=>{if(e.pointerId===stId)stMove(e)});
+const stEnd=e=>{if(e.pointerId!==stId)return;stId=null;releaseStick()};
+stEl.addEventListener('pointerup',stEnd);stEl.addEventListener('pointercancel',stEnd);stEl.addEventListener('lostpointercapture',stEnd);
+const AK={};
+function keyStick(){const x=(AK.arrowright?1:0)-(AK.arrowleft?1:0),y=(AK.arrowdown?1:0)-(AK.arrowup?1:0);
+  if(x||y){if(!G||G.state!=='combat'||G.paused)return;const m=Math.hypot(x,y);STK.x=x/m;STK.y=y/m;STK.active=true;STK.src='key'}else if(STK.src==='key')releaseStick()}
+document.addEventListener('keyup',e=>{const k=e.key.toLowerCase();if(k.startsWith('arrow')){delete AK[k];keyStick()}});
+window.addEventListener('resize',()=>requestAnimationFrame(placeStick));
+function syncStickSettings(){const s=P.settings.stick;$('sStick').checked=s.on;$('sStSize').value=s.size;$('sStY').value=s.y;$('sStX').value=s.x;document.querySelectorAll('#sSide button').forEach(b=>b.classList.toggle('on',b.dataset.v===s.side));placeStick();stickVisible()}
+$('sStick').onchange=e=>{P.settings.stick.on=e.target.checked;syncStickSettings()};
+$('sStSize').oninput=e=>{P.settings.stick.size=+e.target.value;syncStickSettings()};
+$('sStY').oninput=e=>{P.settings.stick.y=+e.target.value;syncStickSettings()};
+$('sStX').oninput=e=>{P.settings.stick.x=+e.target.value;syncStickSettings()};
+$('sSide').onclick=e=>{const b=e.target.closest('button');if(!b)return;P.settings.stick.side=b.dataset.v;syncStickSettings()};
 function openSettings(from){setFrom=from;const s=P.settings;$('sMusic').value=s.music;$('sSfx').value=s.sfx;$('sMute').checked=s.mute;$('sNums').checked=s.nums;
-  document.querySelectorAll('#sFx button').forEach(b=>b.classList.toggle('on',b.dataset.v===s.fx));$('resetNote').textContent='';$('bReset').dataset.c='';$('bReset').textContent='Reset all progress';$('settings').hidden=false}
+  document.querySelectorAll('#sFx button').forEach(b=>b.classList.toggle('on',b.dataset.v===s.fx));$('resetNote').textContent='';$('bReset').dataset.c='';$('bReset').textContent='Reset all progress';$('settings').hidden=false;syncStickSettings()}
 $('bSettings').onclick=()=>openSettings('menu');
-$('bSetBack').onclick=()=>{$('settings').hidden=true;saveProfile()};
+$('bSetBack').onclick=()=>{$('settings').hidden=true;saveProfile();stickVisible()};
 $('sMusic').oninput=e=>{P.settings.music=+e.target.value;audioStart();applyVol()};
 $('sSfx').oninput=e=>{P.settings.sfx=+e.target.value;audioStart();applyVol();sfx('ui')};
 $('sMute').onchange=e=>{P.settings.mute=e.target.checked;applyVol()};
@@ -1780,6 +1831,7 @@ $('bReset').onclick=()=>{const b=$('bReset');if(b.dataset.c!=='1'){b.dataset.c='
 
 document.addEventListener('keydown',e=>{
   if(!G)return;const k=e.key.toLowerCase();
+  if(k.startsWith('arrow')){e.preventDefault();AK[k]=1;keyStick();return}
   if(G.state==='cards'&&!$('cards').hidden&&/^[1-4]$/.test(k)){pickCard(+k-1);return}
   if(k===' '||k==='escape'){e.preventDefault();if(G.arm&&k==='escape'){G.arm=null;return}setPause(!G.paused)}
   else if(/^[123]$/.test(k))setSpeed(SPEEDS[+k-1]);
