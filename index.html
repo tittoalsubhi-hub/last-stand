@@ -167,6 +167,7 @@ h2.t{margin:0;font-family:var(--display);font-size:26px;letter-spacing:.05em;tex
 .evhead{display:flex;gap:14px;align-items:center}
 .evhead .ico{width:56px;height:56px;display:grid;place-items:center;border:1px solid var(--amber);color:var(--amber)}
 #over .newach{color:var(--amber);font-size:12px;line-height:1.6}
+#rotate{z-index:9}
 @media (prefers-reduced-motion:reduce){*{transition:none!important}}
 </style>
 
@@ -215,6 +216,16 @@ h2.t{margin:0;font-family:var(--display);font-size:26px;letter-spacing:.05em;tex
       </div>
       <div class="note" id="mNotice"></div>
       <div class="keys"><b>Tap enemy</b> priority target · <b>Tap guard → tap slot</b> reposition · <b>Tap pad</b> build turret<br><b>Space</b> pause · <b>1 2 3</b> speed · <b>Enter</b> start wave · <b>Q W E R…</b> abilities</div>
+    </div>
+  </div>
+
+  <div class="ov" id="rotate" hidden>
+    <div class="box" style="width:min(360px,100%);text-align:center;justify-items:center">
+      <svg class="i" viewBox="0 0 24 24" width="64" height="64" aria-hidden="true" style="color:var(--cyan)"><g fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="7" y="2" width="10" height="17" rx="2"/><path d="M3 15a9 9 0 0 0 9 7l-2-2M21 9a9 9 0 0 0-9-7l2 2"/></g></svg>
+      <h2 class="t">Turn your phone sideways</h2>
+      <p class="note" style="margin:0">Last Stand is built for landscape. The battlefield is much bigger that way.</p>
+      <button class="btn" id="bRotateGo">Switch to landscape</button>
+      <button class="btn alt" id="bRotateSkip">Keep playing in portrait</button>
     </div>
   </div>
 
@@ -1695,13 +1706,26 @@ $('bStart').onclick=startWave;
 
 /* ---- menus ---- */
 function openMenu(){
-  G=null;['over','cards','pause','prep','event','research','records','settings'].forEach(i=>$(i).hidden=true);$('app').classList.remove('prep');$('hud').hidden=true;$('menu').hidden=false;
+  G=null;$('rotate').hidden=true;['over','cards','pause','prep','event','research','records','settings'].forEach(i=>$(i).hidden=true);$('app').classList.remove('prep');$('hud').hidden=true;$('menu').hidden=false;
   $('bContinue').hidden=!hasSavedRun();$('mShards').innerHTML=`${ic('chip',16)} ${P.shards} data shards`;$('bestTxt').textContent=P.stats.best?`Best: wave ${P.stats.best}`:'';$('mNotice').textContent=notice;
   buildAbilBar();requestAnimationFrame(resize);
 }
 function beginRun(){['menu','over','cards','pause','research'].forEach(i=>$(i).hidden=true);$('hud').hidden=false;showPrep(true);buildAbilBar();hud(true)}
-$('bNew').onclick=$('bRetry').onclick=()=>{audioStart();clearRun();newRun();beginRun();saveRun();banner('LAST STAND','One guard. One pistol. Hold the roof.')};
-$('bContinue').onclick=()=>{audioStart();if(loadRun()){beginRun();toast(`Run restored at wave ${G.wave+1}`)}else openMenu()};
+function goLandscape(){
+  try{
+    const lock=()=>{try{const o=screen.orientation;if(o&&o.lock)o.lock('landscape').catch(()=>{})}catch(e){}};
+    const el=document.documentElement,fs=document.fullscreenElement||document.webkitFullscreenElement;
+    if(!fs&&el.requestFullscreen&&matchMedia('(pointer:coarse)').matches){el.requestFullscreen({navigationUI:'hide'}).then(lock,lock)}else lock();
+  }catch(e){}
+  setTimeout(checkRotate,600);
+}
+function checkRotate(){const portrait=innerHeight>innerWidth&&matchMedia('(pointer:coarse)').matches;$('rotate').hidden=!(portrait&&G&&!rotateDismissed)}
+let rotateDismissed=false;
+window.addEventListener('resize',()=>setTimeout(checkRotate,200));
+$('bRotateGo').onclick=()=>goLandscape();
+$('bRotateSkip').onclick=()=>{rotateDismissed=true;checkRotate()};
+$('bNew').onclick=$('bRetry').onclick=()=>{goLandscape();audioStart();clearRun();newRun();beginRun();saveRun();banner('LAST STAND','One guard. One pistol. Hold the roof.')};
+$('bContinue').onclick=()=>{goLandscape();audioStart();if(loadRun()){beginRun();toast(`Run restored at wave ${G.wave+1}`)}else openMenu()};
 $('bMenu').onclick=openMenu;
 $('bQuit').onclick=()=>{const b=$('bQuit');if(b.dataset.c!=='1'){b.dataset.c='1';b.textContent='Tap again to abandon';$('pauseNote').textContent='Abandoning ends the run and awards shards for what you survived.';return}
   b.dataset.c='';b.textContent='Abandon run';G.paused=false;$('pause').hidden=true;G.hp=0;G.state='combat';gameOver()};
