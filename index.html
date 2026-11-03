@@ -953,6 +953,7 @@ function hitEnemy(e,dmg,pen,crit,src){
   if(e.hp<=0)killEnemy(e,src.ref);
 }
 function killEnemy(e,ref){
+  if(e.crate){e.dead=true;crateOpened(e);return}
   e.dead=true;
   G.combo=(G.comboT>0?G.combo:0)+1;G.comboT=2.5;if(G.combo>(G.stats.bestCombo||0))G.stats.bestCombo=G.combo;
   if([10,25,50,75,100,150,200,300].includes(G.combo)){comboPop(`${G.combo} MULTI KILL`);if(G.combo>=25)slowmo(.6);buzz(35)}
@@ -965,21 +966,31 @@ function killEnemy(e,ref){
   if(G.priority===e)G.priority=null;
 }
 function gainXp(v){G.xp+=v;const need=60+G.cmd*50;if(G.xp>=need){G.xp-=need;G.cmd++;G.tokens++;toast(`Commander level ${G.cmd}: +1 card reroll`)}}
-/* supply crates (fetch with a guard) and card crates (tap within 3s) */
+/* crates: shootable targets that stay 3 seconds after landing. Some supply crates are booby-trapped and look identical. */
 function cratePos(minD,maxD){for(let k=0;k<30;k++){const a=rand(0,TAU),r=bh()+rand(minD,maxD),x=CX+Math.cos(a)*r,y=CY+Math.sin(a)*r;if(x>70&&x<W-70&&y>110&&y<H-80)return{x,y}}return{x:CX+bh()+120,y:CY}}
-function dropSupply(){const p=cratePos(90,220);const kind=pickW({credits:4,tech:1.5,repair:2,charge:1.5});G.crates.push({x:p.x,y:p.y,fall:.9,life:15,kind,claimed:null,gone:false});toast('Supply crate landing: tap it to send a guard');sfx('drone')}
-const CRATE_TXT={credits:'credits',tech:'tech',repair:'hull repair',charge:'ability recharge'};
-function collectCrate(c){if(c.gone)return;c.gone=true;
-  if(c.kind==='credits'){const v=60+G.wave*10;G.credits+=v;toast(`Supply crate: +${v} CR`)}
-  else if(c.kind==='tech'){G.tc+=1;toast('Supply crate: +1 tech')}
-  else if(c.kind==='repair'){const v=Math.round(G.maxHp*.12);G.hp=Math.min(G.maxHp,G.hp+v);toast(`Supply crate: +${v} hull`)}
+function spawnCrateEnt(card){
+  const p=card?cratePos(110,260):cratePos(40,250),hp=card?25+G.wave*3:15+G.wave*2;
+  const e={crate:card?'card':'supply',kind:card?null:pickW({credits:4,tech:1.5,repair:2,charge:1.5}),trap:!card&&Math.random()<.3,
+    x:p.x,y:p.y,vx:0,vy:0,hp,maxHp:hp,armor:0,r:card?24:14,d:{name:card?'Card crate':'Supply crate',color:card?'#ffb627':'#3dff9a'},
+    fall:.9,life:3,det:false,dead:false,air:false,shield:0,shieldMax:0,eres:0,hit:0,stillT:0,recent:0,recentT:0,b:{},reward:0,elite:false,boss:false,revealT:0};
+  G.enemies.push(e);return e}
+function dropSupply(){spawnCrateEnt(false);toast('Supply crate incoming: shoot it within 3 seconds');sfx('drone')}
+function spawnCardCrate(){G.cardCrate=spawnCrateEnt(true);G.cardCrate.done=false;G.cardCrate.hitOk=false;toast('CARD CRATE! Shoot it within 3 seconds');sfx('alarm');buzz([30,40,30])}
+function crateOpened(e){
+  if(e.crate==='card'){e.done=true;e.hitOk=true;ring(e.x,e.y,60,'#ffb627',.6);spark(e.x,e.y,'#ffb627',24,220,.6,3);toast('Card crate destroyed: upgrade after this wave');sfx('up');buzz(30);return}
+  if(e.trap){const d=distToBld(e.x,e.y),k=clamp(1-d/350,.08,1),dmg=Math.round(G.maxHp*.3*k);
+    damageBuilding(dmg,e.x,e.y,true);for(const g of G.guards)if(Math.hypot(g.x-e.x,g.y-e.y)<80)damageGuard(g,30);
+    ring(e.x,e.y,80,'#ff3355',.6);ring(e.x,e.y,140,'#ff7a3d',.8);spark(e.x,e.y,'#ff7a3d',30,280,.7,3);G.shake=Math.min(16,G.shake+6+k*8);sfx('boom');buzz([60,30,120]);
+    toast(`Booby-trapped crate! ${d<120?'It was close to the building':'The blast was far from the building'}: −${dmg} hull`);return}
+  if(e.kind==='credits'){const v=60+G.wave*10;G.credits+=v;toast(`Supply crate: +${v} CR`)}
+  else if(e.kind==='tech'){G.tc+=1;toast('Supply crate: +1 tech')}
+  else if(e.kind==='repair'){const v=Math.round(G.maxHp*.12);G.hp=Math.min(G.maxHp,G.hp+v);toast(`Supply crate: +${v} hull`)}
   else{for(const k in G.abil)G.abil[k].cd*=.5;toast('Supply crate: abilities half recharged')}
-  ring(c.x,c.y,40,'#3dff9a',.5);spark(c.x,c.y,'#3dff9a',14,160,.5);sfx('up');buzz(25)}
-function spawnCardCrate(){const p=cratePos(110,260);G.cardCrate={x:p.x,y:p.y,fall:.9,life:3,done:false,hit:false};toast('CARD CRATE! Tap it within 3 seconds');sfx('alarm');buzz([30,40,30])}
+  ring(e.x,e.y,40,'#3dff9a',.5);spark(e.x,e.y,'#3dff9a',14,160,.5);sfx('up');buzz(25)}
 function crateTick(dt){
-  const c=G.cardCrate;if(c&&!c.done){if(c.fall>0)c.fall-=dt;else{c.life-=dt;if(c.life<=0){c.done=true;c.hit=false;ring(c.x,c.y,50,'#8f87b2',.6);toast('Card crate lost: no upgrade after this wave')}}}
-  for(const s of G.crates){if(s.fall>0)s.fall-=dt;else if(!s.claimed)s.life-=dt;if(s.life<=0)s.gone=true}
-  G.crates=G.crates.filter(s=>!s.gone);
+  for(const e of G.enemies){if(!e.crate||e.dead)continue;
+    if(e.fall>0){e.fall-=dt;if(e.fall<=0)e.det=true}
+    else{e.life-=dt;if(e.life<=0){e.dead=true;e.expired=true;ring(e.x,e.y,40,'#8f87b2',.5);if(e.crate==='card'){e.done=true;e.hitOk=false;toast('Card crate lost: no upgrade after this wave')}}}}
 }
 function detonate(e,seg){
   e.dead=true;e.selfDet=true;const r=70;
@@ -1011,6 +1022,7 @@ function chooseTarget(sg,range,w,exclude){
     let v=distToBld(e.x,e.y);
     if(w.prefer==='tough')v=-e.maxHp+v*.05;else if(w.prefer==='air')v=(e.air?-1000:0)+v;
     if(e.boss)v-=40;
+    if(e.crate)v-=900;
     if(v<bv){bv=v;best=e}}
   return best;
 }
@@ -1176,6 +1188,7 @@ function moveDrone(dr,tx,ty,spd,dt){const dx=tx-dr.x,dy=ty-dr.y,dd=Math.hypot(dx
 function nearestGroundGuard(e,maxD){let b=null,bd=maxD;for(const g of G.guards){if(g.down>0)continue;if(!geomAt(g).ground)continue;const d=Math.hypot(g.x-e.x,g.y-e.y);if(d<bd){bd=d;b=g}}return b}
 function eShoot(e,tx,ty,kind,ref,spd,size,col){const a=Math.atan2(ty-e.y,tx-e.x)+rand(-.04,.04),p=getProj();p.x=e.x;p.y=e.y;p.vx=Math.cos(a)*spd;p.vy=Math.sin(a)*spd;p.dmg=e.dmg;p.life=5;p.kind=kind;p.ref=ref;p.size=size||3;p.col=col||'#ff3355';p.delay=0;p.expl=!!e.d.expl;G.eproj.push(p);e.revealT=Math.max(e.revealT,2.5)}
 function updateEnemy(e,dt){
+  if(e.crate)return;
   e.hit=Math.max(0,e.hit-dt);if(e.revealT>0)e.revealT-=dt;if(e.burnT>0)e.burnT-=dt;
   e.recentT+=dt;if(e.recentT>2){e.recentT=0;e.recent=0}
   if(e.shieldMax){e.shDelay-=dt;if(e.shDelay<=0)e.shield=Math.min(e.shieldMax,e.shield+e.shieldMax*.12*dt)}
@@ -1410,7 +1423,7 @@ function startWave(){
   for(const k in G.fx)G.fx[k]=0;
   G.combo=0;G.comboT=0;G.ctrl=null;G.crates=[];G.cardCrate=null;
   const lastT=G.queue.length?G.queue[G.queue.length-1].t:10;
-  G.crateTimes=G.wave>=3?[rand(8,Math.max(10,lastT*.5))].concat(G.wave>=10?[rand(lastT*.55,Math.max(lastT*.6,lastT*.9))]:[]):[];
+  G.crateTimes=G.wave>=3?Array.from({length:2+(G.wave>=10?1:0)},()=>rand(6,Math.max(9,lastT*.9))).sort((a,b)=>a-b):[];
   G.cardCrateT=G.wave%2===0?rand(6,Math.max(8,lastT*.55)):null;
   // reinforcements & swarm extras
   for(let k=0;k<G.cur.reinforce;k++){const s=freeSlots()[0];const g=makeGuard('rifle',s||null);g.temp=true;g.rank=1;if(!s){g.x=CX+rand(-30,30);g.y=CY+rand(-30,30);g.hx=g.x;g.hy=g.y}G.guards.push(g)}
@@ -1436,7 +1449,7 @@ function waveCleared(){
   if(G.wave>=10)unlock('w10');if(G.wave>=25)unlock('w25');if(G.wave>=50)unlock('w50');
   if(G.wave>P.stats.best)P.stats.best=G.wave;
   saveProfile();
-  const lost=G.cardCrateT!=null&&G.cardCrate&&!G.cardCrate.hit;
+  const lost=G.cardCrateT!=null&&G.cardCrate&&!G.cardCrate.hitOk;
   G.cardCrateT=null;G.cardCrate=null;G.crates=[];G.ctrl=null;for(const g of G.guards){g.fetch=null;g.forced=null}
   if(lost){G.cards=null;banner('WAVE CLEARED','Card crate missed: no upgrade this wave');setTimeout(()=>{if(G&&G.state==='cards')maybeEvent()},1400);return}
   G.cards=rollCards();
@@ -1625,13 +1638,13 @@ function hud(force){
   let mh=0;for(const g of G.guards)if(g.heat>mh)mh=g.heat;for(const t of G.turrets)if(t.heat>mh)mh=t.heat;
   $('hHtW').hidden=!hasHeat(G);if(hasHeat(G)){$('hHt').style.transform=`scaleX(${mh})`;$('hHtT').textContent=`HEAT ${Math.round(mh*100)}%${mh>=.99?' · OVERHEATED':''}`}
   $('hCr').textContent=fmt(G.credits);$('hTc').textContent=G.tc;$('hCmd').textContent=G.cmd;$('hXp').style.transform=`scaleX(${G.xp/(60+G.cmd*50)})`;
-  $('hEn').textContent=inC?G.queue.length+G.enemies.length:0;
+  $('hEn').textContent=inC?G.queue.length+G.enemies.filter(e=>!e.crate).length:0;
   $('hGu').textContent=G.guards.length;$('hTu').textContent=G.turrets.length;$('hDr').textContent=G.drones.length;
   const boss=G.enemies.find(e=>e.boss&&!e.dead);
   $('boss').hidden=!boss;if(boss){$('bossName').textContent=boss.d.name.toUpperCase();$('bossHp').style.transform=`scaleX(${Math.max(0,boss.hp/boss.maxHp)})`;$('bossInfo').textContent=boss.shield>0?`SHIELD ${fmt(boss.shield)}`:boss.b.stag>0?'STAGGERED':''}
   $('hint').hidden=!(G.state==='prep'||G.wave<=2||G.ctrl);
   const cv2=G.state==='combat'&&G.combo>=3&&G.comboT>0;$('combo').hidden=!cv2;if(cv2){$('comboN').textContent='×'+G.combo;$('comboM').textContent=`COMBO · +${Math.round(Math.min(G.combo,50)*2)}% CR`;$('comboBar').style.transform=`scaleX(${G.comboT/2.5})`}
-  $('hint').textContent=G.arm?`Tap the battlefield to fire ${ABIL[G.arm].name}.`:G.state==='prep'?'Tap a guard, then a slot, to move it. Tap a pad to build a turret.':(G.ctrl?`Controlling ${gdef(G.ctrl).name}: the joystick moves only him; tap an enemy to focus him. Tap him again for the squad.`:'Tap a guard to control him alone. Tap enemies to focus fire. Tap falling crates!');
+  $('hint').textContent=G.arm?`Tap the battlefield to fire ${ABIL[G.arm].name}.`:G.state==='prep'?'Tap a guard, then a slot, to move it. Tap a pad to build a turret.':(G.ctrl?`Controlling ${gdef(G.ctrl).name}: the joystick moves only him; tap an enemy to focus him. Tap him again for the squad.`:'Tap a guard to control him alone. Move guards into range so they shoot crates within 3 seconds. Some supply crates are traps.');
   if(G.state==='prep'){const cr=$('prepCr');if(cr)cr.textContent=fmt(G.credits)+' CR'}
   updAbilBar();stickVisible();
 }
@@ -1677,7 +1690,7 @@ function prepOverview(){
     ${nw.boss?`<p class="warn">BOSS: ${ENEMIES[nw.bossType].name.toUpperCase()}</p><p class="rep">Weakness: ${ENEMIES[nw.bossType].weak}</p>`:''}
     ${nw.elite?'<p class="warn">ELITE UNITS DETECTED · each drops 1 tech</p>':''}
     ${nw.convoy?'<p class="warn">ELITE CONVOY INBOUND</p>':''}${nw.malf?`<p class="rep">Malfunction: ${nw.malf} at 60%</p>`:''}${nw.pfail?'<p class="rep">Power failure: −35% capacity</p>':''}${nw.reinforce?'<p class="rep">2 mercenaries join this wave</p>':''}
-    ${nw.report.map(r=>`<p class="rep">${r}</p>`).join('')}${nw.n%2===0?'<p class="warn">CARD CRATE WAVE · tap the falling crate within 3 seconds or lose this wave\'s upgrade</p>':''}</section>`;
+    ${nw.report.map(r=>`<p class="rep">${r}</p>`).join('')}${nw.n%2===0?'<p class="warn">CARD CRATE WAVE · your guards must shoot the crate within 3 seconds or you lose this wave\'s upgrade</p>':''}</section>`;
   h+=`<section class="sec"><div class="eyebrow">Building</div>`;
   h+=nx?item({act:'expand',icon:'up',color:'var(--mag)',name:`Expand: ${nx.name}`,sub:`+${nx.hpBonus} hull · ${LEVEL_PERKS[G.level+1]}`,cost:nx.cost,dis:G.credits<nx.cost}):item({act:'none',icon:'star',name:'Ultimate Stronghold built',sub:'Every building stage unlocked',dis:1});
   h+=item({act:'repair',icon:'wrench',color:'var(--green)',name:'Repair hull',sub:`+60 HP (${fmt(G.hp)}/${fmt(G.maxHp)})`,cost:40,dis:G.hp>=G.maxHp||G.credits<40})+'</section>';
@@ -1906,13 +1919,9 @@ cv.addEventListener('pointerdown',ev=>{
   const r=cv.getBoundingClientRect(),x=(ev.clientX-r.left)/r.width*W,y=(ev.clientY-r.top)/r.height*H;
   if(G.state==='combat'){
     if(G.arm){const id=G.arm;G.arm=null;useAbility(id,x,y);hud(true);return}
-    const cc=G.cardCrate;if(cc&&!cc.done&&cc.fall<=.15&&Math.hypot(cc.x-x,cc.y-y)<52){cc.done=true;cc.hit=true;ring(cc.x,cc.y,60,'#ffb627',.6);spark(cc.x,cc.y,'#ffb627',24,220,.6,3);toast('Card crate secured: upgrade after this wave');sfx('up');buzz(30);return}
-    for(const c of G.crates){if(c.claimed||Math.hypot(c.x-x,c.y-y)>36)continue;
-      let g=G.ctrl&&G.ctrl.down<=0?G.ctrl:null,bg=1e9;if(!g)for(const q of G.guards){if(q.down>0||q.fetch||(q.slot&&q.slot[0]==='P'))continue;const dd=Math.hypot(q.x-c.x,q.y-c.y);if(dd<bg){bg=dd;g=q}}
-      if(g){g.fetch=c;c.claimed=g;g.returning=false;toast(`${gdef(g).name} running for the crate (${CRATE_TXT[c.kind]})`);sfx('ui')}else toast('No guard free to fetch it');return}
     let tg=null,tgd=22;for(const g of G.guards){if(g.down>0)continue;const dd=Math.hypot(g.x-x,g.y-y);if(dd<tgd){tgd=dd;tg=g}}
     if(tg){if(G.ctrl===tg){G.ctrl=null;toast('Joystick controls the whole squad')}else{G.ctrl=tg;toast(`Controlling ${gdef(tg).name}`)}sfx('ui');hud(true);return}
-    let best=null,bd=1e9;for(const e of G.enemies){if(e.dead||!e.det)continue;const d=Math.hypot(e.x-x,e.y-y);if(d<e.r+26&&d<bd){bd=d;best=e}}
+    let best=null,bd=1e9;for(const e of G.enemies){if(e.dead||!e.det||e.crate)continue;const d=Math.hypot(e.x-x,e.y-y);if(d<e.r+26&&d<bd){bd=d;best=e}}
     if(G.ctrl){if(best){G.ctrl.forced=best;toast(`${gdef(G.ctrl).name} focusing ${best.d.name}`)}else{G.ctrl.forced=null;G.ctrl=null;toast('Joystick controls the whole squad')}hud(true);return}
     G.priority=best;if(best)toast(`Priority target: ${best.d.name}`);
   }else if(G.state==='prep'){
@@ -1992,9 +2001,10 @@ function drawCrate(c,k,t,card){
   c.globalCompositeOperation='lighter';c.fillStyle=card?'rgba(255,182,39,.18)':'rgba(61,255,154,.12)';c.beginPath();c.arc(0,0,sz*2.4,0,TAU);c.fill();c.globalCompositeOperation='source-over';
   c.fillStyle='#1a1630';c.strokeStyle=col;c.lineWidth=2.5;c.fillRect(-sz,-sz,sz*2,sz*2);c.strokeRect(-sz,-sz,sz*2,sz*2);
   c.beginPath();c.moveTo(-sz,0);c.lineTo(sz,0);c.moveTo(0,-sz);c.lineTo(0,sz);c.stroke();c.restore();
-  const frac=card?k.life/3:k.life/15;c.strokeStyle=col;c.lineWidth=3;c.beginPath();c.arc(k.x,k.y,sz*1.9,-PI/2,-PI/2+TAU*Math.max(0,frac));c.stroke();
+  const frac=k.life/3;c.strokeStyle=col;c.lineWidth=3;c.beginPath();c.arc(k.x,k.y,sz*1.9,-PI/2,-PI/2+TAU*Math.max(0,frac));c.stroke();
   c.font='700 13px "Chakra Petch",sans-serif';c.textAlign='center';c.fillStyle=col;
-  c.fillText(card?`TAP! ${Math.max(0,k.life).toFixed(1)}`:k.claimed?'INCOMING':'SUPPLY',k.x,k.y-sz*2.4);
+  c.fillText(`${card?'SHOOT!':'SUPPLY'} ${Math.max(0,k.life).toFixed(1)}`,k.x,k.y-sz*2.4);
+  if(k.hp<k.maxHp){c.fillStyle='rgba(0,0,0,.7)';c.fillRect(k.x-sz,k.y+sz+5,sz*2,3);c.fillStyle=col;c.fillRect(k.x-sz,k.y+sz+5,sz*2*Math.max(0,k.hp/k.maxHp),3)}
   if(k.claimed){c.strokeStyle='rgba(61,255,154,.5)';c.setLineDash([4,4]);c.lineWidth=1;c.beginPath();c.moveTo(k.claimed.x,k.claimed.y);c.lineTo(k.x,k.y);c.stroke();c.setLineDash([])}
 }
 function drawGuard(c,g,t){
@@ -2063,6 +2073,7 @@ function drawDrone(c,dr,t){
 }
 function drawEnemy(c,e,t){
   const d=e.d;
+  if(e.crate){drawCrate(c,e,t,e.crate==='card');return}
   if(!e.det){c.globalAlpha=.12+.08*Math.sin(t*9+e.phase);c.strokeStyle='#9cff57';c.lineWidth=1;c.beginPath();c.arc(e.x,e.y,e.r,0,TAU);c.stroke();c.globalAlpha=1;return}
   let a=(e.vx||e.vy)?Math.atan2(e.vy,e.vx):Math.atan2(CY-e.y,CX-e.x);
   c.save();c.translate(e.x,e.y);
@@ -2149,7 +2160,7 @@ function render(){
     for(const g of G.guards)drawGuard(ctx,g,t);
     for(const e of G.enemies)if(!e.dead&&e.air)drawEnemy(ctx,e,t);
     for(const d of G.drones)drawDrone(ctx,d,t);
-    for(const c of G.crates)drawCrate(ctx,c,t,false);if(G.cardCrate&&!G.cardCrate.done)drawCrate(ctx,G.cardCrate,t,true);
+
     // projectiles & beams
     ctx.globalCompositeOperation='lighter';
     for(const p of G.proj){if(p.delay>0)continue;ctx.strokeStyle=p.col;ctx.lineWidth=p.w;ctx.beginPath();ctx.moveTo(p.x-p.vx*.022,p.y-p.vy*.022);ctx.lineTo(p.x,p.y);ctx.stroke();if(p.splash){ctx.fillStyle='#ffd0f4';ctx.beginPath();ctx.arc(p.x,p.y,3.5,0,TAU);ctx.fill()}}
