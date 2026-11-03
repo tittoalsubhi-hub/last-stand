@@ -299,7 +299,7 @@ h2.t{margin:0;font-family:var(--display);font-size:26px;letter-spacing:.05em;tex
       <label class="set">Size<input type="range" id="sStSize" min="80" max="200" step="5"></label>
       <label class="set">Height<input type="range" id="sStY" min="0" max="100" step="1"></label>
       <label class="set">From edge<input type="range" id="sStX" min="0" max="100" step="1"></label>
-      <div class="note">Drag the joystick to move every guard together. Let go and each guard walks back to his assigned post. Arrow keys do the same on a keyboard.</div>
+      <div class="note">Drag the joystick to move every guard together across the rooftop. Let go and each guard walks back to his assigned post. Arrow keys do the same on a keyboard.</div>
       <div class="set"><span>Visual effects</span><div class="seg" id="sFx"><button data-v="auto">Auto</button><button data-v="high">High</button><button data-v="low">Low</button></div></div>
       <div class="row"><button class="btn warn" id="bReset">Reset all progress</button><span class="note" id="resetNote"></span></div>
       <button class="btn alt" id="bSetBack">Back</button>
@@ -1028,8 +1028,9 @@ function updateGuard(g,dt,idx){
   if(d.heat||d.heatPS){const cm=coolMul();g.heat=Math.max(0,g.heat-dt*.42*cm);if(g.over&&g.heat<.3)g.over=false}
   // --- manual joystick control ---
   if(STK.active){
-    const sp=95*G.M.move*dt,L=240+G.M.leash;let nx=clamp(g.x+STK.x*sp,24,W-24),ny=clamp(g.y+STK.y*sp,24,H-24);
-    if(distToBld(nx,ny)<=L){g.x=nx;g.y=ny}else if(distToBld(nx,g.y)<=L)g.x=nx;else if(distToBld(g.x,ny)<=L)g.y=ny;
+    const sp=95*G.M.move*dt;
+    if(g.slot&&g.slot[0]==='P'){/* platform guards stay on their platform */}
+    else{const ih=bh()-10;g.x=clamp(g.x+STK.x*sp,CX-ih,CX+ih);g.y=clamp(g.y+STK.y*sp,CY-ih,CY+ih)}
     g.dest=null;g.returning=true;if(!g.target&&(STK.x||STK.y))g.ang=Math.atan2(STK.y,STK.x);
   }else if(g.returning){const home=g.slot?slotGeom(g.slot):{x:g.hx||CX,y:g.hy||CY};
     if(Math.hypot(home.x-g.x,home.y-g.y)<2){g.x=home.x;g.y=home.y;g.returning=false;g.dest=null;g.postHold=10}else g.dest=home}
